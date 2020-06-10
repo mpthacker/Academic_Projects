@@ -1,0 +1,108 @@
+---
+title: "Spatial SARer Models, Temperature, and Sulfur"
+author: "Matt Thacker"
+date: "May 5, 2017"
+output: html_document
+---
+
+Does reflectance due to sulfur aerosols have a relationship with local warming trends? local cooling? 
+
+Linear and spatial SAR models are estimated between measures of local extreme temperatures and top of atmosphere radiative forcing due to sulfur aerosols. For more information on the data used, analysis of the results, and the specifications of the models estimated see the projects tab and write up also posted in this repository. 
+
+
+
+Reading in the data and establishing near neighbor lists and a spatial weights matrix  
+```{r}
+library(rgdal)
+library(maptools)
+library(spatialreg)
+library(spdep)
+
+
+##define important variables
+
+#census stations
+census<- readOGR(dsn="Shapefiles/CensusStations","CensusFlux_Points")
+names(census@data)[names(census@data) == "RASTERVALU"]<- "Flux"   
+
+#k nearest neighbor list 
+NLcensus<- knn2nb(knearneigh(census, k=5)) 
+
+#spatial weights matrix
+Wcensus<- nb2listw(NLcensus) 
+
+```
+
+
+
+Estimating naive linear models and checking for spatial autocorrelation in the error
+```{r}
+#Estimate OLS of relationship of interest
+olsTmax<- lm(D_Tmax ~ Flux, data = census@data)
+olsTmin<- lm(D_Tmin ~ Flux, data = census@data)
+olsTmaxNew<- lm(TMAXNEW ~ Flux, data = census@data)
+olsTminNew<- lm(TMINNEW ~ Flux, data =census@data)
+
+
+#Moran's I test for Spatial Autocorrelation in relationship
+miTmax<- lm.morantest(olsTmax, Wcensus, alternative = "two.sided")
+miTmin<- lm.morantest(olsTmin, Wcensus, alternative = "two.sided")
+miTmaxNew<- lm.morantest(olsTmaxNew, Wcensus, alternative = "two.sided")
+miTminNew<- lm.morantest(olsTminNew, Wcensus, alternative = "two.sided")
+miTmax
+miTmin
+miTmaxNew
+miTminNew
+```
+
+
+
+Selecting between SARlag, SARer, or mixed model using robust Lagrange Multipier tests for spatial dependence
+```{r}
+#Lagrange Multiplier test for spatial lag vs. error
+lmTmax <- lm.LMtests(olsTmax, Wcensus, test = "all")
+lmTmin <- lm.LMtests(olsTmin, Wcensus, test = "all")
+lmTmaxNew <- lm.LMtests(olsTmaxNew, Wcensus, test= "all")
+lmTminNew <- lm.LMtests(olsTminNew, Wcensus, test = "all")
+lmTmax
+lmTmin
+lmTmaxNew
+lmTminNew
+```
+
+
+
+Fitting spatial SARer models
+```{r}
+#Estimate Spatial Simultaneous Autoregressive Error Model
+EsarTmax<- errorsarlm(D_Tmax ~ Flux, data = census@data, Wcensus, method = "LU", control=list(returnHcov=FALSE))
+EsarTmin<- errorsarlm(D_Tmin ~ Flux, data = census@data, Wcensus, method = "LU", control=list(returnHcov=FALSE))
+EsarTmaxNew<- errorsarlm(TMAXNEW ~ Flux, data = census@data, Wcensus, method = "LU", control=list(returnHcov=FALSE))
+EsarTminNew<- errorsarlm(TMINNEW ~ Flux, data = census@data, Wcensus, method = "LU", control=list(returnHcov=FALSE))
+summary(EsarTmax)
+summary(EsarTmin)
+summary(EsarTmaxNew)
+summary(EsarTminNew)
+```
+
+
+
+Examining data for trends which may contextualize or explain results.
+```{r}
+#attach attribute table for convience 
+dat<- census@data
+attach(dat)
+
+#histograms of response variables 
+hist(TMAXNEW,xlab = "Tmax_2005", main = "Tmax_2005")
+hist(TMINNEW, xlab = "Tmin_2005", main = "Tmin_2005")
+hist(D_Tmax, xlab = "Tmax", main = "Tmax")
+hist(D_Tmin, xlab = "Tmin", main = "Tmin")
+
+#plotted vs. Flux values
+plot(Flux, D_Tmax, main = "TOA Flux vs. Tmax", ylab = "Tmax", ylim = c(0, 350), pch = 20)
+plot(Flux, D_Tmin, main = "TOA Flux vs. Tmin", ylab = "Tmin", ylim = c(0,350), pch = 20)
+plot(Flux, TMAXNEW, main = "TOA Flux vs. Tmax_2005", ylab = "Tmax_2005", ylim = c(0,200), pch = 20)
+plot(Flux, TMINNEW, main = "TOA Flux vs. Tmin_2005", ylab = "Tmin_2005", ylim = c(0,200), pch = 20)
+```
+
