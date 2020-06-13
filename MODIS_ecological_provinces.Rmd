@@ -18,7 +18,7 @@ library(ggplot2)
 
 ##read in data
 #chlorophyl a
-chl_a <- raster("Images/Jul2017Mean/Chl_a/chl_subset3.rp.tif")
+chl_a <- raster("MODIS_EP_Images/Jul2017Mean/Chl_a/chl_subset3.rp.tif")
 
 ##optional line commented out which subsets image to remove boreal polar province from longhurst
 #chl_a <- crop(chl_a, extent(chl_a, 1, 447, 16, 728))  
